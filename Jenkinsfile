@@ -7,7 +7,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/manish40/sample-nginx-ci.git'
+                git branch: 'main', url: 'https://github.com/manishgowdas/sample-nginx-ci.git'
             }
         }
 
