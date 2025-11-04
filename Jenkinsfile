@@ -1,5 +1,8 @@
 pipeline {
     agent any
+    options {
+        disableConcurrentBuilds()
+    }
 
     environment {
         AWS_REGION = 'ap-northeast-3'
@@ -8,6 +11,7 @@ pipeline {
         IMAGE_TAG = "v${BUILD_NUMBER}"
         GIT_CREDENTIALS_ID = 'githubrepo'
         AWS_CREDENTIALS_ID = 'aws-creds'
+        SKIP_COMMITTER = "Jenkins CI"
     }
 
     stages {
