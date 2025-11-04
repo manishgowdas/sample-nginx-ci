@@ -11,7 +11,7 @@ pipeline {
         IMAGE_TAG = "v${BUILD_NUMBER}"
         GIT_CREDENTIALS_ID = 'githubrepo'
         AWS_CREDENTIALS_ID = 'aws-creds'
-        SKIP_COMMITTER = "Jenkins CI"
+        DEPLOY_BRANCH = 'deploy'
     }
 
     stages {
@@ -49,27 +49,30 @@ pipeline {
 
         stage('Update Helm Chart') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'githubrepo', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
-                    sh '''
+                withCredentials([usernamePassword(credentialsId: "${GIT_CREDENTIALS_ID}", usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
+                    sh """
                         echo "Updating Helm values.yaml with new image tag..."
-                        sed -i "s|tag: .*|tag: ${IMAGE_TAG}|g" helm/myapp/values.yaml
+                        sed -i 's|tag: .*|tag: ${IMAGE_TAG}|g' helm/myapp/values.yaml
+
                         git config --global user.email "jenkins@ci.local"
                         git config --global user.name "Jenkins CI"
+
+                        git checkout -B ${DEPLOY_BRANCH}
                         git add helm/myapp/values.yaml
                         git commit -m "Update image tag to ${IMAGE_TAG}" || echo "No changes to commit"
-                        git push https://${GIT_USER}:${GIT_PASS}@github.com/manishgowdas/sample-nginx-ci.git HEAD:main
-                    '''
+                        git push https://${GIT_USER}:${GIT_PASS}@github.com/manishgowdas/sample-nginx-ci.git HEAD:${DEPLOY_BRANCH}
+                    """
                 }
             }
         }
-    }  
+    }
 
     post {
         success {
-            echo "CI Pipeline completed. ArgoCD will auto-sync the new image."
+            echo "✅ CI Pipeline completed. ArgoCD will auto-sync from '${DEPLOY_BRANCH}'."
         }
         failure {
-            echo "CI Pipeline failed. Please check Jenkins logs."
+            echo "❌ CI Pipeline failed. Please check Jenkins logs."
         }
     }
 }
