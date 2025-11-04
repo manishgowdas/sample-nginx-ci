@@ -67,18 +67,20 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: 'githubrepo', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
                     sh '''
                         echo "Updating Helm values.yaml with new image tag..."
-                        
-                        git fetch origin deploy || true
-                        git checkout -B deploy origin/deploy || git checkout -B deploy
+                sed -i "s|tag: .*|tag: ${IMAGE_TAG}|g" helm/myapp/values.yaml
 
-                        sed -i "s|tag: .*|tag: ${IMAGE_TAG}|g" helm/myapp/values.yaml
-                        git config --global user.email "jenkins@ci.local"
-                        git config --global user.name "Jenkins CI"
-                        git add helm/myapp/values.yaml
-                        git commit -m "Update image tag to ${IMAGE_TAG}" || echo "No changes to commit"
-                        
-                        git pull origin deploy --rebase || true
-                        git push https://${GIT_USER}:${GIT_PASS}@github.com/manishgowdas/sample-nginx-ci.git deploy
+                git config --global user.email "jenkins@ci.local"
+                git config --global user.name "Jenkins CI"
+
+                # Copy everything from main into deploy before committing
+                git fetch origin
+                git checkout -B deploy origin/deploy || git checkout -b deploy
+                git merge --strategy=ours main --no-edit
+
+                cp -r helm/myapp helm/myapp
+                git add helm/myapp/values.yaml
+                git commit -m "Sync Helm chart + update image tag to ${IMAGE_TAG}" || echo "No changes to commit"
+                git push https://${GIT_USER}:${GIT_PASS}@github.com/manishgowdas/sample-nginx-ci.git HEAD:deploy
                     '''
                 }
             }
