@@ -66,19 +66,22 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'githubrepo', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
                     sh '''
-    echo "Updating Helm values.yaml with new image tag..."
-    sed -i "s|tag: .*|tag: ${IMAGE_TAG}|g" helm/myapp/values.yaml
-    git config --global user.email "jenkins@ci.local"
-    git config --global user.name "Jenkins CI"
+                echo "Updating Helm values.yaml with new image tag..."
+                sed -i "s|tag: .*|tag: ${IMAGE_TAG}|g" helm/myapp/values.yaml
 
-    git fetch origin
-    git branch -D deploy || true
-    git checkout -B deploy origin/deploy || git checkout -B deploy
+                git config --global user.email "jenkins@ci.local"
+                git config --global user.name "Jenkins CI"
 
-    git add helm/myapp/values.yaml
-    git commit -m "Update image tag to ${IMAGE_TAG}" || echo "No changes to commit"
-    git push https://${GIT_USER}:${GIT_PASS}@github.com/manishgowdas/sample-nginx-ci.git deploy
-'''
+                git fetch origin
+                git branch -D deploy || true
+                git checkout -B deploy origin/deploy || git checkout -B deploy
+
+                git add helm/myapp/values.yaml
+                git commit -m "Update image tag to ${IMAGE_TAG}" || echo "No changes to commit"
+
+                # Push forcefully to ensure deploy branch is always updated cleanly
+                git push https://${GIT_USER}:${GIT_PASS}@github.com/manishgowdas/sample-nginx-ci.git deploy --force
+            '''
 
                 }
             }
