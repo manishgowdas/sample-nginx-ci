@@ -48,11 +48,11 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: 'githubrepo', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
                     sh '''
                         echo "Updating Helm values.yaml with new image tag..."
-                        sed -i 's|tag: .*|tag: v10|g' helm/myapp/values.yaml
+                        sed -i "s|tag: .*|tag: ${IMAGE_TAG}|g" helm/myapp/values.yaml
                         git config --global user.email "jenkins@ci.local"
                         git config --global user.name "Jenkins CI"
                         git add helm/myapp/values.yaml
-                        git commit -m "Update image tag to v10" || echo "No changes to commit"
+                        git commit -m "Update image tag to ${IMAGE_TAG}" || echo "No changes to commit"
                         git push https://${GIT_USER}:${GIT_PASS}@github.com/manishgowdas/sample-nginx-ci.git HEAD:main
                     '''
                 }
