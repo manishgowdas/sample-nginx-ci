@@ -1,5 +1,6 @@
 pipeline {
     agent any
+
     options {
         disableConcurrentBuilds()
     }
@@ -11,12 +12,26 @@ pipeline {
         IMAGE_TAG = "v${BUILD_NUMBER}"
         GIT_CREDENTIALS_ID = 'githubrepo'
         AWS_CREDENTIALS_ID = 'aws-creds'
-        DEPLOY_BRANCH = 'deploy'
+        SKIP_COMMITTER = "Jenkins CI"
+    }
+
+    triggers {
+        // Only trigger Jenkins automatically on commits to 'main'
+        githubPush()
     }
 
     stages {
         stage('Checkout') {
             steps {
+                script {
+                    // Skip builds triggered by Jenkins commits to deploy branch
+                    def lastCommitAuthor = sh(script: "git log -1 --pretty=format:'%an'", returnStdout: true).trim()
+                    if (lastCommitAuthor == "${SKIP_COMMITTER}") {
+                        echo "Skipping build triggered by Jenkins CI commit."
+                        currentBuild.result = 'ABORTED'
+                        error("Build aborted to prevent loop.")
+                    }
+                }
                 git branch: 'main',
                     url: 'https://github.com/manishgowdas/sample-nginx-ci.git',
                     credentialsId: "${GIT_CREDENTIALS_ID}"
@@ -49,19 +64,22 @@ pipeline {
 
         stage('Update Helm Chart') {
             steps {
-                withCredentials([usernamePassword(credentialsId: "${GIT_CREDENTIALS_ID}", usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
-                    sh """
+                withCredentials([usernamePassword(credentialsId: 'githubrepo', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
+                    sh '''
                         echo "Updating Helm values.yaml with new image tag..."
-                        sed -i 's|tag: .*|tag: ${IMAGE_TAG}|g' helm/myapp/values.yaml
+                        
+                        git fetch origin deploy || true
+                        git checkout -B deploy origin/deploy || git checkout -B deploy
 
+                        sed -i "s|tag: .*|tag: ${IMAGE_TAG}|g" helm/myapp/values.yaml
                         git config --global user.email "jenkins@ci.local"
                         git config --global user.name "Jenkins CI"
-
-                        git checkout -B ${DEPLOY_BRANCH}
                         git add helm/myapp/values.yaml
                         git commit -m "Update image tag to ${IMAGE_TAG}" || echo "No changes to commit"
-                        git push https://${GIT_USER}:${GIT_PASS}@github.com/manishgowdas/sample-nginx-ci.git HEAD:${DEPLOY_BRANCH}
-                    """
+                        
+                        git pull origin deploy --rebase || true
+                        git push https://${GIT_USER}:${GIT_PASS}@github.com/manishgowdas/sample-nginx-ci.git deploy
+                    '''
                 }
             }
         }
@@ -69,10 +87,13 @@ pipeline {
 
     post {
         success {
-            echo "✅ CI Pipeline completed. ArgoCD will auto-sync from '${DEPLOY_BRANCH}'."
+            echo "✅ CI Pipeline completed successfully. ArgoCD will auto-sync the new image."
         }
         failure {
             echo "❌ CI Pipeline failed. Please check Jenkins logs."
+        }
+        aborted {
+            echo "⚠️ Build aborted — likely due to Jenkins self-trigger protection."
         }
     }
 }
